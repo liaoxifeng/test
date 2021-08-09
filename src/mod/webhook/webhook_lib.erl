@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(webhook_lib).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 %% API

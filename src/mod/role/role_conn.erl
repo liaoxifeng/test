@@ -2,18 +2,19 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
-%%%
+%%% role socket收发器
 %%% @end
 %%% Created : 30. 十一月 2020 9:08
 %%%-------------------------------------------------------------------
 -module(role_conn).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
+-include("role.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([create/4, rpc/2, send/2]).
 
 %% gen_server callbacks
 -export([
@@ -25,10 +26,27 @@
     code_change/3
 ]).
 
+-record(conn, {
+    type = 0,
+    socket = 0,
+    ip = 0,
+    port = 0,
+    pid = ?undefined
+}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+rpc(Pid, String) ->
+    Bin = list_to_binary(String),
+    Pid ! {rpc, Bin}.
+
+%% 信息返回客户端
+send(#role{sid = Sid}, Bin) ->
+    Sid ! {send, Bin};
+send(Sid, Bin) ->
+    Sid ! {send, Bin}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -37,8 +55,8 @@
 %% @end
 %%--------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+create(ClientType, Socket, Ip, Port) ->
+    gen_server:start(?MODULE, [ClientType, Socket, Ip, Port], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -56,8 +74,11 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([]) ->
-    {ok, #{}}.
+init([ClientType, Socket, Ip, Port]) ->
+    process_flag(trap_exit, true),
+    prim_inet:async_recv(Socket, 0 , 60000),
+    State = #conn{type = ClientType, socket = Socket, ip = Ip, port = Port},
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -67,7 +88,8 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    ?info("~w~n", [Request]),
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -77,8 +99,8 @@ handle_call(_Request, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
-
-handle_cast(_Request, State) ->
+handle_cast(Request, State) ->
+    ?info("~w~n", [Request]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -91,10 +113,33 @@ handle_cast(_Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_info({rpc, Bin}, State = #conn{socket = Socket}) ->
+    case gen_tcp:send(Socket, Bin) of
+        ok -> skip;
+        {error, Reason} ->
+            ?error("rpc error :~w~n",[Reason])
+    end,
+    {noreply, State};
 
-handle_info(_Info, State) ->
+handle_info({inet_async, Socket, _Ref, {ok, Msg}}, State) ->
+    prim_inet:async_recv(Socket, 0 , 60000),
+    case conn_hdl(Msg, State) of
+        State2 when is_record(State2, conn) ->
+            {noreply, State2};
+        _ ->
+            {noreply, State}
+    end;
+
+handle_info({inet_async, _Socket, _Ref, {error, timeout}}, State) ->
+    {stop, normal, State};
+handle_info({inet_async, _Socket, _Ref, {error, closed}}, State) ->
+    {stop, normal, State};
+handle_info({send, Bin}, #conn{socket = Socket} = State) ->
+    gen_tcp:send(Socket, Bin),
+    {noreply, State};
+handle_info(Info, State) ->
+    ?info("~w", [Info]),
     {noreply, State}.
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -107,7 +152,8 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-terminate(_Reason, _State) ->
+terminate(Reason, _State) ->
+    ?info("Reason ~w", [Reason]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -125,3 +171,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+%% 客户端协议处理
+conn_hdl(Msg, #conn{pid = RPid}) ->
+    ?info("~w", [Msg]),
+    case is_process_alive(RPid) of
+        true ->
+            RPid ! {apply_async, {conn_hdl, do, [Msg]}};
+        _ ->
+            ok
+    end.

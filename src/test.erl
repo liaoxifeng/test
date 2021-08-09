@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(test).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 
 -behaviour(application).
 

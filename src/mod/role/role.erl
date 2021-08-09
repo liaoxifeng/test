@@ -2,19 +2,20 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
-%%%
+%%% 玩家进程
 %%% @end
 %%% Created : 30. 十一月 2020 9:07
 %%%-------------------------------------------------------------------
 -module(role).
 -author("liaoxifeng").
 
--include("test.hrl").
+-include("common.hrl").
+-include("role.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start/1]).
 
 %% gen_server callbacks
 -export([
@@ -26,10 +27,6 @@
     code_change/3
 ]).
 
--record(role, {
-    conn = undefined
-}).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -40,9 +37,11 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
-
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+-spec start(Role::#role{}) -> {ok, pid()} | ignore | {error, term()}.
+start(#role{} = Role) ->
+    Now = util:unixtime(),
+    LocalName = list_to_atom(lists:concat(["role_", integer_to_list(Now)])),
+    gen_server:start({local, LocalName}, ?MODULE, [Role], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -60,8 +59,8 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([]) ->
-    {ok, #role{}}.
+init([Role]) ->
+    {ok, Role}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -71,8 +70,8 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(_Request, _From, Role) ->
+    {reply, ok, Role}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -82,8 +81,8 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(_Request, State) ->
-    {noreply, State}.
+handle_cast(_Request, Role) ->
+    {noreply, Role}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -96,6 +95,15 @@ handle_cast(_Request, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
+handle_info({apply_async, {M, F, A}}, Role) ->
+    case erlang:apply(M, F, [Role | A]) of
+        ok ->
+            {noreply, Role};
+        {ok, NewRole} ->
+            {noreply, NewRole};
+        _Err ->
+            {noreply, Role}
+    end;
 handle_info(_Info, State) ->
     {noreply, State}.
 

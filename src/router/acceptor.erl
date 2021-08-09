@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(acceptor).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 
 -behaviour(gen_server).
 
@@ -135,7 +135,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-%%  gen_tcp:send(Socket, ).
 accept(Socket) ->
     case gen_tcp:recv(Socket, 23) of
         {ok, <<"game_client------------">>} ->
@@ -148,15 +147,15 @@ accept(Socket) ->
             ?info("~p", [timeout]),
             ok;
         Else ->
-            ?info("Else ~p", [Else]),
-            web_lib:web_hdl(Else, Socket)
+            ?error("gen_tcp recv error ~p", [Else]),
+            ok
     end.
 
 create_conn(ClientType, _Packet, Socket) ->
     try
         {ok, {Ip, Port}} = inet:peername(Socket),
         ?info("~p ~w", [Ip, Port]),
-        {ok, Pid} = conn:create(ClientType, Socket, Ip, Port),
+        {ok, Pid} = role_conn:create(ClientType, Socket, Ip, Port),
         gen_tcp:controlling_process(Socket, Pid)
     catch
         _:_ ->

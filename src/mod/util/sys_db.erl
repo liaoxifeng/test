@@ -2,17 +2,23 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
-%%%
+%%% 数据库
 %%% @end
-%%% Created : 24. 十月 2020 11:10
+%%% Created : 09. 十一月 2020 20:06
 %%%-------------------------------------------------------------------
--module(conn).
+-module(sys_db).
 -author("liaoxifeng").
+-include("common.hrl").
+-include("role.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([create/4]).
+-export([
+    start_link/0,
+    get_kv/1,
+    set_kv/2
+]).
 
 %% gen_server callbacks
 -export([
@@ -24,17 +30,19 @@
     code_change/3
 ]).
 
--record(conn, {
-    type = 0,
-    socket = 0,
-    ip = 0,
-    port = 0,
-    loop_counter = 0
-}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+get_kv(Key) ->
+    case ets:lookup(kv, Key) of
+        [Value] -> Value;
+        _ -> ?undefined
+    end.
+
+set_kv(Key, Value) ->
+    ets:insert(kv, #kv{key = Key, value = Value, dirty = true}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -43,8 +51,8 @@
 %% @end
 %%--------------------------------------------------------------------
 
-create(ClientType, Socket, Ip, Port) ->
-    gen_server:start(?MODULE, [ClientType, Socket, Ip, Port], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -62,11 +70,16 @@ create(ClientType, Socket, Ip, Port) ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([ClientType, Socket, Ip, Port]) ->
+init([]) ->
     process_flag(trap_exit, true),
-    erlang:send_after(10000, self(), loop),
-    State = #conn{type = ClientType, socket = Socket, ip = Ip, port = Port},
-    {ok, State}.
+    ets:new(kv, [set, public, {keypos, #kv.key}, {read_concurrency, true}, named_table]),
+    ets:new(role_brief, [set, public, {keypos, #role_brief.id}, {read_concurrency, true}, named_table]),
+    dets:open_file(role, [{file, "./dets/role.dets"}, {keypos, #role.id}, {type, set}]),
+    dets:open_file(role_brief, [{file, "./dets/role_brief.dets"}, {keypos, #role_brief.id}, {type, set}]),
+    dets:open_file(kv, [{file, "./dets/kv.dets"}, {keypos, #kv.key}, {type, set}]),
+    ?info("sys_db start success!!!"),
+    erlang:send_after(?sync_dirty_interval, self(), sync_dirty),
+    {ok, #{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -76,8 +89,7 @@ init([ClientType, Socket, Ip, Port]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(Request, _From, State) ->
-    io:format("~p ~p ~w~n", [?MODULE, ?LINE, Request]),
+handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -88,8 +100,7 @@ handle_call(Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(Request, State) ->
-    io:format("~p ~p ~w~n", [?MODULE, ?LINE, Request]),
+handle_cast(_Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -102,16 +113,12 @@ handle_cast(Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info(loop, State = #conn{loop_counter = C}) ->
-    case C rem 18 =:= 0 of
-        false -> ignore;
-        true -> garbage_collect()
-    end,
-    erlang:send_after(10000, self(), loop),
-    {noreply, State#conn{loop_counter = C + 1}};
+handle_info(sync_dirty, State) ->
+    sync_dirty(sync, kv),
+    erlang:send_after(?sync_dirty_interval, self(), sync_dirty),
+    {noreply, State};
 
-handle_info(Info, State) ->
-    io:format("~p ~p ~w~n", [?MODULE, ?LINE, Info]),
+handle_info(_Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -127,6 +134,11 @@ handle_info(Info, State) ->
 %%--------------------------------------------------------------------
 
 terminate(_Reason, _State) ->
+    ?info("[~w] 正在关闭...", [?MODULE]),
+    sync_dirty(sync, kv),
+    util:close_dets(role),
+    util:close_dets(kv),
+    ?info("[~w] 关闭完成", [?MODULE]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -144,3 +156,17 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+%% 从ets写回dets
+sync_dirty(Flag, kv) ->
+    Fun = fun (#kv{dirty = false}, Acc) -> Acc;
+        (E = #kv{key = Key, dirty = true}, sync) ->
+            dets:insert(kv, E#kv{dirty = false}),
+            ets:update_element(kv, Key, {#kv.dirty, false}),
+            sync;
+        (E = #kv{dirty = true}, close) ->
+            dets:insert(kv, E#kv{dirty = false}),
+            close
+          end,
+    ets:foldl(Fun, Flag, kv);
+sync_dirty(_Flag, _Table) ->
+    ok.

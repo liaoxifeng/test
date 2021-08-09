@@ -8,19 +8,34 @@
 %%%-------------------------------------------------------------------
 -module(util).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 %% API
 -export([
     to_list/1
-    , rand_list/1
-    , format_date/0
-    , to_binary/1
-    , unixtime/0
-    , md5/1
-    , string_to_term/1
+    ,rand_list/1
+    ,format_date/0
+    ,to_binary/1
+    ,unixtime/0
+    ,md5/1
+    ,string_to_term/1
+    ,close_dets/1
 ]).
+
+%%%% 打包协议
+%%encode_msg(Msg) -> encode_msg(Msg, []).
+%%encode_msg(Msg, Opts) ->
+%%    Body = all_pb:encode_msg(Msg, Opts),
+%%    Name = atom_to_binary(element(1, Msg), latin1),
+%%    NameLen = byte_size(Name),
+%%    <<NameLen:8, Name/binary, Body/binary>>.
+%%
+%%%% 解包协议
+%%decode_msg(<<NameLen:8, NameBin:NameLen/binary, Body/binary>>) ->
+%%    MsgName = binary_to_atom(NameBin, latin1),
+%%    all_pb:decode_msg(Body, MsgName).
+
 
 %% @doc term反序列化，string转换为term
 -spec string_to_term(String) -> {error, Reason} | {ok, term()} when
@@ -99,3 +114,10 @@ to_binary(V) when is_list(V) -> list_to_binary(V);
 to_binary(V) when is_integer(V) -> integer_to_binary(V);
 to_binary(V) when is_atom(V) -> atom_to_binary(V, unicode);
 to_binary(V) when is_binary(V) -> V.
+
+%% @doc 关闭dets，有错则打印
+close_dets(Name) ->
+    case catch dets:close(Name) of
+        ok -> ok;
+        _Err -> ?error("关闭dets[~w]失败:~w", [Name, _Err])
+    end.

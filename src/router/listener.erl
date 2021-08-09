@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(listener).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 
 -behaviour(gen_server).
 
