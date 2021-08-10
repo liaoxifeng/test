@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(crontab).
 -author("liaoxifeng").
--include("test.hrl").
+-include("common.hrl").
 
 -behaviour(gen_server).
 
@@ -152,7 +152,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% 年 月 日 时 分 秒
 rule() -> [
     {"*", "*", "*", 6, 0, 0, {webhook, weather, []}},
-    {"*", "*", "*", "*", 0, 0, {webhook_lib, drink, []}}
+    {"*", "*", "*", [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22], 0, 0, {webhook_lib, drink, []}}
 ].
 
 %% 处理定时器

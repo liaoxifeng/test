@@ -14,12 +14,12 @@
 %% API
 -export([
     webhook_text/3
-    , webhook_image/1
-    , webhook_file/2
-    , weather/0
-    , weather2/0
-    , weather3/0
-    , drink/0
+    ,webhook_image/1
+    ,webhook_file/2
+    ,weather/0
+    ,weather2/0
+    ,weather3/0
+    ,drink/0
 ]).
 
 

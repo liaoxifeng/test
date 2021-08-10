@@ -50,12 +50,12 @@ start(_StartType, _StartArgs) ->
 %% 启动项目
 start() ->
     {ok, _} = application:ensure_all_started(lager),
-    ok = application:start(test),
     ok = ssl:start(),
     ok = inets:start(),
     ok = application:start(fs),
     {ok, _} = application:ensure_all_started(mongodb),
     monitor:start(),
+    ok = application:start(test),
     ?info("projec start success"),
     ok.
 
