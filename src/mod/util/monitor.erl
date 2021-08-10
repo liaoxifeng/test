@@ -12,7 +12,7 @@
 
 -behaviour(gen_server).
 
--include("test.hrl").
+-include("common.hrl").
 
 %% API
 -export([start_link/1,start/0]).

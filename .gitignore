@@ -2,4 +2,5 @@ apps
 log
 .idea
 *.iml
-*.dump
+erl_crash.dump
+ebin
