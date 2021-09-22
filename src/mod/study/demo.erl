@@ -147,7 +147,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% gen_server 内部自己退出或发生crash退出，都会执行terminate/2
 %% 如果stop的原因不是normal，error_log会记录本次退出信息。
 
-%% 外部强制退出
+%% gen_server 外部强制退出
 %% demo:start_link(false).
 %% demo:start_link(true).
 %%

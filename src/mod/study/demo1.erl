@@ -9,8 +9,6 @@
 -module(demo1).
 -author("liaoxifeng").
 
--include("common.hrl").
-
 -behaviour(gen_server).
 
 %% API
@@ -31,12 +29,13 @@
 %%% API
 %%%===================================================================
 
-%% exit(normal).   process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,normal} 进程还在
-%% exit(kill).     process_flag(trap_exit, true)   不执行terminate 不收到消息，进程挂了
-%% exit(whatever). process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,whatever} 进程还在
-%% exit(normal).   process_flag(trap_exit, false)  不执行terminate 不收到消息，进程还在
-%% exit(kill).     process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
-%% exit(whatever). process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
+%% link的进程
+%% demo1:exit(normal).   process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,normal} 进程还在
+%% demo1:exit(kill).     process_flag(trap_exit, true)   不执行terminate 不收到消息，进程挂了
+%% demo1:exit(whatever). process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,whatever} 进程还在
+%% demo1:exit(normal).   process_flag(trap_exit, false)  不执行terminate 不收到消息，进程还在
+%% demo1:exit(kill).     process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
+%% demo1:exit(whatever). process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
 exit(Reason) ->
     exit(whereis(demo1), Reason).
 
@@ -71,9 +70,9 @@ start_link() ->
 %%--------------------------------------------------------------------
 
 init([]) ->
-%%    process_flag(trap_exit, true),
-    process_flag(trap_exit, false),
-    ?info("demo1 start pid ~w", [self()]),
+    process_flag(trap_exit, true),
+%%    process_flag(trap_exit, false),
+    io:format("[line:~p] demo1 start pid ~w~n", [?LINE, self()]),
     {ok, #{}}.
 
 %%--------------------------------------------------------------------
@@ -111,8 +110,11 @@ handle_cast(_Request, State) ->
 handle_info({crash, N}, State) ->
     io:format("[line:~p] crash ~w~n", [?LINE, N/0]),
     {noreply, State};
+handle_info(stop, State) ->
+    io:format("[line:~p] [info] ~w~n", [?LINE, stop]),
+    {stop, normal, State};
 handle_info(Info, State) ->
-    ?info("[info] ~w", [Info]),
+    io:format("[line:~p] [info] ~w~n", [?LINE, Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -128,7 +130,7 @@ handle_info(Info, State) ->
 %%--------------------------------------------------------------------
 
 terminate(Reason, _State) ->
-    ?info("[terminate] ~w", [Reason]),
+    io:format("[line:~p] [terminate] ~w~n", [?LINE, Reason]),
     ok.
 
 %%--------------------------------------------------------------------
