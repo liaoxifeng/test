@@ -13,16 +13,21 @@
 
 %% API
 -export([
-    to_list/1
+    now/0
+    ,to_list/1
     ,rand_list/1
     ,format_date/0
     ,to_binary/1
-    ,unixtime/0
+    ,unixtime/0, unixtime/1
     ,md5/1
     ,string_to_term/1
     ,close_dets/1
+    ,add_index/2
 ]).
 
+
+now() ->
+    os:timestamp().
 %%%% 打包协议
 %%encode_msg(Msg) -> encode_msg(Msg, []).
 %%encode_msg(Msg, Opts) ->
@@ -60,9 +65,21 @@ md5(Data) ->
 %% @doc 取得当前的unix时间戳
 -spec unixtime() -> pos_integer().
 unixtime() ->
-
     {M, S, _} = os:timestamp(),
     M * 1000000 + S.
+
+%% @doc 返回相应类型的unix时间戳
+-spec unixtime(X) -> pos_integer() when
+    X :: ms | zero | {zero, pos_integer()} | {next_day, pos_integer()}.
+unixtime(ms) ->
+    {S1, S2, S3} = ?MODULE:now(),
+    trunc(S1 * 1000000000 + S2 * 1000 + S3 / 1000);
+unixtime(zero) ->
+    {M, S, MS} = ?MODULE:now(),
+    {_, Time} = calendar:now_to_local_time({M, S, MS}),
+    M * 1000000 + S - calendar:time_to_seconds(Time);
+unixtime(five) ->
+    unixtime(zero) + 3600 * 5.
 
 %% @doc 从一个list中随机取出一项
 -spec rand_list(List::list()) -> undefined | term().
@@ -121,3 +138,12 @@ close_dets(Name) ->
         ok -> ok;
         _Err -> ?error("关闭dets[~w]失败:~w", [Name, _Err])
     end.
+
+%% 给列表元素从1到N加上索引，列表需要先按需要排序好
+-spec add_index(L :: list(), Index ::integer()) -> L1 :: list().
+add_index(L, Index) ->
+    add_index(L, Index, 1, []).
+add_index([], _I, _No, Back) ->
+    lists:reverse(Back);
+add_index([H | T], I, No, Back) ->
+    add_index(T, I, No + 1, [erlang:setelement(I, H, No) | Back]).

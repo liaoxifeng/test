@@ -16,12 +16,50 @@
 -export([
     start/2,
     start/0,
-    stop/1
+    stop/1,
+    stop/0,
+    stop_server/1
 ]).
 
 %%%===================================================================
 %%% Application callbacks
 %%%===================================================================
+%% 启动项目
+start() ->
+    {ok, _} = application:ensure_all_started(lager),
+    ok = ssl:start(),
+    ok = inets:start(),
+    ok = application:start(fs),
+    {ok, _} = application:ensure_all_started(mongodb),
+    monitor:start(),
+    ok = application:start(test),
+    ?info("projec start success"),
+    ok.
+
+%% 关闭项目
+stop() ->
+    io:setopts([{encoding, unicode}]),
+    case init:get_plain_arguments() of
+        [NodeStr | _] ->
+            Node = list_to_atom(NodeStr),
+            case rpc:call(Node, test, stop_server, [stop]) of
+                ok ->
+                    rpc:cast(Node, test, stop_server, [halt]),
+                    io:format("~ts 已关闭~n", [Node]);
+                _ ->
+                    io:format("~ts 关闭失败~n", [Node])
+            end;
+        _ ->
+            io:format("结点输入错误~n")
+    end,
+    halt().
+
+%% 关闭服务器
+stop_server(stop) ->
+    ok = application:stop(test),
+    ok;
+stop_server(_) ->
+    halt().
 
 %%--------------------------------------------------------------------
 %% @private
@@ -46,18 +84,6 @@ start(_StartType, _StartArgs) ->
         {ok, Pid} -> {ok, Pid};
         Error -> Error
     end.
-
-%% 启动项目
-start() ->
-    {ok, _} = application:ensure_all_started(lager),
-    ok = ssl:start(),
-    ok = inets:start(),
-    ok = application:start(fs),
-    {ok, _} = application:ensure_all_started(mongodb),
-    monitor:start(),
-    ok = application:start(test),
-    ?info("projec start success"),
-    ok.
 
 %%--------------------------------------------------------------------
 %% @private

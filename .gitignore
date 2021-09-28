@@ -4,3 +4,4 @@ log
 *.iml
 erl_crash.dump
 ebin
+dets

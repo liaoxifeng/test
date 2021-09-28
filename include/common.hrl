@@ -53,3 +53,9 @@
 -define(info(F, Msg), lager:info(io_lib:format(F, Msg))).
 -define(error(Msg), lager:error(Msg)).
 -define(error(F, Msg), lager:error(io_lib:format(F, Msg))).
+
+%% 启动参数，进程休眠
+-define(start_opt_hibernate, {hibernate_after, 3000}).
+
+%%条件判断
+-define(IF(CON,Y,N),case (CON) of true -> Y;_ -> N end).

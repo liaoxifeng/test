@@ -74,9 +74,9 @@ init([]) ->
     process_flag(trap_exit, true),
     ets:new(kv, [set, public, {keypos, #kv.key}, {read_concurrency, true}, named_table]),
     ets:new(role_brief, [set, public, {keypos, #role_brief.id}, {read_concurrency, true}, named_table]),
-    dets:open_file(role, [{file, "./dets/role.dets"}, {keypos, #role.id}, {type, set}]),
-    dets:open_file(role_brief, [{file, "./dets/role_brief.dets"}, {keypos, #role_brief.id}, {type, set}]),
-    dets:open_file(kv, [{file, "./dets/kv.dets"}, {keypos, #kv.key}, {type, set}]),
+    dets:open_file(role, [{file, "../dets/role.dets"}, {keypos, #role.id}, {type, set}]),
+    dets:open_file(role_brief, [{file, "../dets/role_brief.dets"}, {keypos, #role_brief.id}, {type, set}]),
+    dets:open_file(kv, [{file, "../dets/kv.dets"}, {keypos, #kv.key}, {type, set}]),
     ?info("sys_db start success!!!"),
     erlang:send_after(?sync_dirty_interval, self(), sync_dirty),
     {ok, #{}}.
