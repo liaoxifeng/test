@@ -31,26 +31,26 @@ fib_test_() ->
         ?_assertException(error, function_clause, fib(-1)),
         ?_assert(fib(31) =:= 2178309)
     ].
-%%
-%%basic_test_() ->
-%%    fun () -> ?assert(1 + 1 =:= 2) end.
-%%
-%%p66_test() ->
-%%    L = [1,2,3],
-%%    [H | L2] = lists:reverse(L),
-%%    do([H + 1 | L2], []).
-%%
-%%do([], Req) -> Req;
-%%do([H | L], Req) when H >= 10 ->
-%%    R = H rem 10,
-%%    P = H div 10,
-%%    do(to_next(P, L), [R | Req]);
-%%do([H | L], Req) ->
-%%    do(L, [ H| Req]).
-%%
-%%
-%%to_next(P, []) -> [P];
-%%to_next(P, [H|L]) -> [H + P | L].
+
+basic_test_() ->
+    fun () -> ?assert(1 + 1 =:= 2) end.
+
+p66_test() ->
+    L = [1,2,3],
+    [H | L2] = lists:reverse(L),
+    do_p66([H + 1 | L2], []).
+
+do_p66([], Req) -> Req;
+do_p66([H | L], Req) when H >= 10 ->
+    R = H rem 10,
+    P = H div 10,
+    do_p66(to_next(P, L), [R | Req]);
+do_p66([H | L], Req) ->
+    do_p66(L, [ H| Req]).
+
+
+to_next(P, []) -> [P];
+to_next(P, [H|L]) -> [H + P | L].
 
 
 p() ->

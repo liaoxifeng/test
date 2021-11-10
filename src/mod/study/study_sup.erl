@@ -55,6 +55,7 @@ start_link() ->
     ignore |
     {error, Reason :: term()}).
 init([]) ->
+    code:load_file(tester),
     AChild = [
         {demo1, {demo1, start_link, []}, transient, 100000, worker, [demo1]}
     ],

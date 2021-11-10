@@ -3,6 +3,10 @@
 %%% @copyright (C) 2019, <COMPANY>
 %%% @doc
 %%% 接收文件的变动，并且动态编译
+%%% {fs, [
+%%%        {backwards_compatible, true},
+%%%        {path, "/mnt/d/work/zone/moli_local_1/log/"}
+%%% ]},
 %%% @end
 %%% Created : 09. 三月 2019 下午7:46
 %%%-------------------------------------------------------------------
@@ -26,8 +30,8 @@
     code_change/3
 ]).
 
-%%-define(path, "/mnt/d/work/zone/moli_local_1/lager_log/debug.log").
--define(path, "/mnt/d/work/zone/moli_local_1/log/log_join-log_1.txt").
+-define(path, "/mnt/d/work/zone/moli_local_1/lager_log/debug.log").
+%%-define(path, "/mnt/d/work/zone/moli_local_1/log/log_join-log_1.txt").
 
 %%%===================================================================
 %%% API
