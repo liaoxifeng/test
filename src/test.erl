@@ -29,9 +29,9 @@ start() ->
     {ok, _} = application:ensure_all_started(lager),
     ok = ssl:start(),
     ok = inets:start(),
-    ok = application:start(fs),
+%%    ok = application:start(fs),
     {ok, _} = application:ensure_all_started(mongodb),
-    monitor:start(),
+%%    monitor:start(),
     ok = application:start(test),
     ?info("projec start success"),
     ok.

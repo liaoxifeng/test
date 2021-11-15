@@ -1,19 +1,18 @@
 %%%-------------------------------------------------------------------
 %%% @author liaoxifeng
-%%% @copyright (C) 2020, <COMPANY>
+%%% @copyright (C) 2021, <COMPANY>
 %%% @doc
-%%% 监控
+%%% demo_1 terminate与trap_exit
 %%% @end
-%%% Created : 23. 十月 2020 8:55
+%%% Created : 09. 八月 2021 17:06
 %%%-------------------------------------------------------------------
--module(listener).
+-module(process2).
 -author("liaoxifeng").
--include("common.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/0, exit/1, crash/1]).
 
 %% gen_server callbacks
 -export([
@@ -30,6 +29,20 @@
 %%% API
 %%%===================================================================
 
+%% link的进程
+%% demo1:exit(normal).   process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,normal} 进程还在
+%% demo1:exit(kill).     process_flag(trap_exit, true)   不执行terminate 不收到消息，进程挂了
+%% demo1:exit(whatever). process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,whatever} 进程还在
+%% demo1:exit(normal).   process_flag(trap_exit, false)  不执行terminate 不收到消息，进程还在
+%% demo1:exit(kill).     process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
+%% demo1:exit(whatever). process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
+exit(Reason) ->
+    exit(whereis(demo1), Reason).
+
+%% crash(1).   process_flag(trap_exit, true)  执行terminate 进程挂了
+%% crash(1).   process_flag(trap_exit, false)  执行terminate 进程挂了
+crash(N) ->
+    ?MODULE ! {crash, N}.
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -58,21 +71,8 @@ start_link() ->
 
 init([]) ->
     process_flag(trap_exit, true),
-    {ok, Port} = application:get_env(test, port),
-    {ok, TcpOptions} = application:get_env(test, tcp_options),
-    case gen_tcp:listen(Port, TcpOptions) of
-        {ok, LSock} ->
-            ok = start_acceptor(80, LSock),
-            ?info("test listen [~p]", [Port]),
-            {ok, #{}};
-        _ ->
-            {stop, listen_failure, #{}}
-    end.
-
-start_acceptor(0, _LSock) -> ok;
-start_acceptor(N, LSock) ->
-    supervisor:start_child(acceptor_sup, [LSock]),
-    start_acceptor(N - 1, LSock).
+%%    process_flag(trap_exit, false),
+    {ok, #{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -106,8 +106,14 @@ handle_cast(_Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-
-handle_info(_Info, State) ->
+handle_info({crash, N}, State) ->
+    io:format("[line:~p] crash ~w~n", [?LINE, N/0]),
+    {noreply, State};
+handle_info(stop, State) ->
+    io:format("[line:~p] [info] ~w~n", [?LINE, stop]),
+    {stop, normal, State};
+handle_info(Info, State) ->
+    io:format("[line:~p] [info] ~w~n", [?LINE, Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -122,7 +128,8 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-terminate(_Reason, _State) ->
+terminate(Reason, _State) ->
+    io:format("[line:~p] [terminate] ~w~n", [?LINE, Reason]),
     ok.
 
 %%--------------------------------------------------------------------

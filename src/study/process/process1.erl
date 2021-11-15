@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 10. 八月 2021 10:35
 %%%-------------------------------------------------------------------
--module(demo).
+-module(process1).
 -author("liaoxifeng").
 
 -behaviour(gen_server).

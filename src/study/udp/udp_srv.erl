@@ -2,11 +2,11 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
-%%% 监控
+%%% 服务端
 %%% @end
-%%% Created : 23. 十月 2020 8:55
+%%% Created : 23. 十月 2020 10:05
 %%%-------------------------------------------------------------------
--module(listener).
+-module(udp_srv).
 -author("liaoxifeng").
 -include("common.hrl").
 
@@ -25,6 +25,10 @@
     code_change/3
 ]).
 
+-record(state, {
+    port,
+    sock
+}).
 
 %%%===================================================================
 %%% API
@@ -57,22 +61,14 @@ start_link() ->
 %%--------------------------------------------------------------------
 
 init([]) ->
-    process_flag(trap_exit, true),
-    {ok, Port} = application:get_env(test, port),
-    {ok, TcpOptions} = application:get_env(test, tcp_options),
-    case gen_tcp:listen(Port, TcpOptions) of
-        {ok, LSock} ->
-            ok = start_acceptor(80, LSock),
-            ?info("test listen [~p]", [Port]),
-            {ok, #{}};
-        _ ->
-            {stop, listen_failure, #{}}
-    end.
-
-start_acceptor(0, _LSock) -> ok;
-start_acceptor(N, LSock) ->
-    supervisor:start_child(acceptor_sup, [LSock]),
-    start_acceptor(N - 1, LSock).
+    Port = 20005,
+    TcpOptions = [
+        binary,
+        {active, true}
+    ],
+    {ok, LSock} = gen_udp:open(Port, TcpOptions),
+    gen_udp:controlling_process(LSock, self()),
+    {ok, #state{port = Port, sock = LSock}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -82,7 +78,8 @@ start_acceptor(N, LSock) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    ?info("~w~n", [Request]),
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -93,7 +90,8 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(_Request, State) ->
+handle_cast(Request, State) ->
+    ?info("~w~n", [Request]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -106,8 +104,12 @@ handle_cast(_Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-
-handle_info(_Info, State) ->
+handle_info({udp, _Socket, Host, Form, Msg}, #state{sock = Socket} = State) ->
+    ?info("udp received ~w, Form ~w", [Msg, Form]),
+    gen_udp:send(Socket, Host, Form, <<"hello">>),
+    {noreply, State};
+handle_info(Info, State) ->
+    ?info("~w~n", [Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------

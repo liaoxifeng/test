@@ -2,7 +2,7 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
-%%% 学习 Erlang/OTP并发编程实战
+%%% 学习
 %%% @end
 %%% Created : 10. 八月 2021 9:50
 %%%-------------------------------------------------------------------
@@ -57,7 +57,10 @@ start_link() ->
 init([]) ->
     code:load_file(tester),
     AChild = [
-        {demo1, {demo1, start_link, []}, transient, 100000, worker, [demo1]}
+        {tcp_srv, {tcp_srv, start_link, []}, transient, 100000, worker, [tcp_srv]}
+        ,{tcp_cli, {tcp_cli, start_link, []}, transient, 100000, worker, [tcp_cli]}
+        ,{udp_srv, {udp_srv, start_link, []}, transient, 100000, worker, [udp_srv]}
+        ,{udp_cli, {udp_cli, start_link, []}, transient, 100000, worker, [udp_cli]}
     ],
     {ok, {{one_for_one, 50, 1}, AChild}}.
 

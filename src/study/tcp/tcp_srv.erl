@@ -1,18 +1,19 @@
 %%%-------------------------------------------------------------------
 %%% @author liaoxifeng
-%%% @copyright (C) 2021, <COMPANY>
+%%% @copyright (C) 2020, <COMPANY>
 %%% @doc
-%%% demo_1 terminate与trap_exit
+%%% 服务端
 %%% @end
-%%% Created : 09. 八月 2021 17:06
+%%% Created : 23. 十月 2020 10:05
 %%%-------------------------------------------------------------------
--module(demo1).
+-module(tcp_srv).
 -author("liaoxifeng").
+-include("common.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, exit/1, crash/1]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([
@@ -24,25 +25,15 @@
     code_change/3
 ]).
 
+-record(state, {
+    port,
+    sock
+}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%% link的进程
-%% demo1:exit(normal).   process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,normal} 进程还在
-%% demo1:exit(kill).     process_flag(trap_exit, true)   不执行terminate 不收到消息，进程挂了
-%% demo1:exit(whatever). process_flag(trap_exit, true)   不执行terminate handle_info/2 收到 {'EXIT',<0.86.0>,whatever} 进程还在
-%% demo1:exit(normal).   process_flag(trap_exit, false)  不执行terminate 不收到消息，进程还在
-%% demo1:exit(kill).     process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
-%% demo1:exit(whatever). process_flag(trap_exit, false)  不执行terminate 不收到消息，进程挂了
-exit(Reason) ->
-    exit(whereis(demo1), Reason).
-
-%% crash(1).   process_flag(trap_exit, true)  执行terminate 进程挂了
-%% crash(1).   process_flag(trap_exit, false)  执行terminate 进程挂了
-crash(N) ->
-    ?MODULE ! {crash, N}.
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -70,10 +61,21 @@ start_link() ->
 %%--------------------------------------------------------------------
 
 init([]) ->
-    process_flag(trap_exit, true),
-%%    process_flag(trap_exit, false),
-    io:format("[line:~p] demo1 start pid ~w~n", [?LINE, self()]),
-    {ok, #{}}.
+    Port = 20000,
+    TcpOptions = [
+        binary
+        ,{packet, 0}
+        ,{active, false}
+        ,{reuseaddr, true}
+        ,{nodelay, false}
+        ,{delay_send, true}
+        ,{exit_on_close, false}
+        ,{send_timeout, 10000}
+        ,{send_timeout_close, false}
+    ],
+    {ok, LSock} = gen_tcp:listen(Port, TcpOptions),
+    self() ! loop,
+    {ok, #state{port = Port, sock = LSock}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -83,7 +85,8 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    ?info("~w~n", [Request]),
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -94,7 +97,8 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(_Request, State) ->
+handle_cast(Request, State) ->
+    ?info("~w~n", [Request]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -107,14 +111,18 @@ handle_cast(_Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({crash, N}, State) ->
-    io:format("[line:~p] crash ~w~n", [?LINE, N/0]),
+handle_info(loop, State = #state{sock = LSock}) ->
+    case gen_tcp:accept(LSock) of
+        {ok, Socket} ->
+            gen_tcp:controlling_process(Socket, spawn(fun () -> accept(Socket) end));
+        {error, closed} -> ignore;
+        {error, Reason} ->
+            ?info("~p", [Reason])
+    end,
+    self() ! loop,
     {noreply, State};
-handle_info(stop, State) ->
-    io:format("[line:~p] [info] ~w~n", [?LINE, stop]),
-    {stop, normal, State};
 handle_info(Info, State) ->
-    io:format("[line:~p] [info] ~w~n", [?LINE, Info]),
+    ?info("~w~n", [Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -129,8 +137,7 @@ handle_info(Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-terminate(Reason, _State) ->
-    io:format("[line:~p] [terminate] ~w~n", [?LINE, Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -148,3 +155,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+accept(Socket) ->
+    case gen_tcp:recv(Socket, 0) of
+        {ok, <<"ping">>} ->
+            ?info("srv received ping"),
+            gen_tcp:send(Socket, "pong"),
+            accept(Socket);
+        {ok, Str} ->
+            ?info("~p", [Str]),
+            accept(Socket);
+        {error, closed} ->
+            ?info("~p", [closed]),
+            gen_tcp:close(Socket);
+        {error, timeout} ->
+            ?info("~p", [timeout]),
+            ok;
+        Else ->
+            ?error("gen_tcp recv error ~p", [Else]),
+            ok
+    end.
