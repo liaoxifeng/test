@@ -57,9 +57,9 @@ start_link() ->
 init([]) ->
     code:load_file(tester),
     AChild = [
-        {tcp_srv, {tcp_srv, start_link, []}, transient, 100000, worker, [tcp_srv]}
-        ,{tcp_cli, {tcp_cli, start_link, []}, transient, 100000, worker, [tcp_cli]}
-        ,{udp_srv, {udp_srv, start_link, []}, transient, 100000, worker, [udp_srv]}
+%%        {tcp_srv, {tcp_srv, start_link, []}, transient, 100000, worker, [tcp_srv]}
+%%        ,{tcp_cli, {tcp_cli, start_link, []}, transient, 100000, worker, [tcp_cli]}
+        {udp_srv, {udp_srv, start_link, []}, transient, 100000, worker, [udp_srv]}
         ,{udp_cli, {udp_cli, start_link, []}, transient, 100000, worker, [udp_cli]}
     ],
     {ok, {{one_for_one, 50, 1}, AChild}}.

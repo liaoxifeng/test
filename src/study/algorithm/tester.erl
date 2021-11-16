@@ -35,6 +35,10 @@ fib_test_() ->
 basic_test_() ->
     fun () -> ?assert(1 + 1 =:= 2) end.
 
+
+%%%===================================================================
+%%% algorithm
+%%%===================================================================
 p66_test() ->
     L = [1,2,3],
     [H | L2] = lists:reverse(L),
@@ -53,37 +57,8 @@ to_next(P, []) -> [P];
 to_next(P, [H|L]) -> [H + P | L].
 
 
+p319_test() ->
+    erlang:trunc(math:sqrt(10)).
+
 p() ->
-    L = [1,1],
-    do(L, []).
-
-do([H | Left], Req) ->
-    case do1(Left, H, []) of
-        {[], _} ->
-            io:format("~w~n", [Req]),
-            length(lists:flatten(Req));
-        {Pre, Next} ->
-            do([hd(Pre)|Next], [H, Pre | Req])
-    end.
-
-do1([], _N, L) ->
-    io:format("ssssv ~w~n", [L]),
-    do2(L, [], []);
-do1([H | L], N, Req) ->
-    do1(L, N, [{H, N =< H} | Req]).
-
-do2([{H, true} | L], Pre, Next) ->
-    do2(L, Pre, [H | Next]);
-do2(L, Pre, Next) -> {to(L, Pre), Next}.
-
-to([], R) -> R;
-to([{H, _} | L], R) -> to(L, [H | R]).
-
-
-
-
-
-
-
-
-
+    ok.
