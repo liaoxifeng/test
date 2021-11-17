@@ -1,0 +1,1 @@
+gcc -w -o ekcp.so -fPIC -shared ekcp.c -I /usr/lib/erlang/erts-10.3/include
