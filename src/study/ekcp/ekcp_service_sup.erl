@@ -2,17 +2,17 @@
 %%% @author liaoxifeng
 %%% @copyright (C) 2021, <COMPANY>
 %%% @doc
-%%% 学习
+%%%
 %%% @end
-%%% Created : 10. 八月 2021 9:50
+%%% Created : 17. 十一月 2021 15:54
 %%%-------------------------------------------------------------------
--module(study_sup).
+-module(ekcp_service_sup).
 -author("liaoxifeng").
 
 -behaviour(supervisor).
 
 %% API
--export([start_link/0]).
+-export([start_link/0, start_child/3]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -32,6 +32,9 @@
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+
+start_child(Port, UDPOpts, EKCPConf) ->
+    supervisor:start_child(?MODULE, [Port, UDPOpts, EKCPConf]).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -55,16 +58,10 @@ start_link() ->
     ignore |
     {error, Reason :: term()}).
 init([]) ->
-    code:load_file(tester),
     AChild = [
-%%        {tcp_srv, {tcp_srv, start_link, []}, transient, 100000, worker, [tcp_srv]}
-%%        ,{tcp_cli, {tcp_cli, start_link, []}, transient, 100000, worker, [tcp_cli]}
-%%        ,{udp_srv, {udp_srv, start_link, []}, transient, 100000, worker, [udp_srv]}
-%%        ,{udp_cli, {udp_cli, start_link, []}, transient, 100000, worker, [udp_cli]}
-         {ekcp_sup, {ekcp_sup, start_link, []}, permanent, 5000, supervisor, [ekcp_sup]}
+        {ekcp_service, {ekcp_service, start_link, []}, permanent, 5000, worker, [ekcp_service]}
     ],
-    {ok, {{one_for_one, 50, 1}, AChild}}.
-
+    {ok, {{simple_one_for_one, 5, 10}, AChild}}.
 
 %%%===================================================================
 %%% Internal functions

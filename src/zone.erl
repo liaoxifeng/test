@@ -55,7 +55,7 @@ init([]) ->
         ,{webhook, {webhook, start_link, []}, transient, 100000, worker, [webhook]}
         ,{crontab, {crontab, start_link, []}, transient, 100000, worker, [crontab]}
         ,{sys_db, {sys_db, start_link, []}, transient, 100000, worker, [sys_db]}
-        ,{study_sup, {study_sup, start_link, []}, permanent, 10000, supervisor, [study_sup]}
+%%        ,{study_sup, {study_sup, start_link, []}, permanent, 10000, supervisor, [study_sup]}
         ,{rank, {rank, start_link, []}, transient, 100000, worker, [rank]}
     ],
     %% {RestartStrategy, MaxR, MaxT}, 如果在最近的MaxT秒之内有超过MaxR次数的重启，则supervisor停止它本身和它所有的子进程

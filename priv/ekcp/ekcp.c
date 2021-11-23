@@ -19,8 +19,10 @@
     return enif_make_badarg(env);
 
 #define GET_KCP \
-    ikcpcb *kcp; \
-    if (!enif_get_resource(env, argv[0], ekcp_recource_type, (void **)&kcp)) RET_BAD
+    res_t *res; \
+    if(!enif_get_resource(env, argv[0], ekcp_recource_type, (void**)&res)) RET_BAD \
+    if(!res->kcp) return enif_make_atom(env, "kcp_null"); \
+    ikcpcb *kcp = res->kcp;
 
 #define GET_INT(index, var) \
     int var; \
@@ -45,24 +47,28 @@ typedef struct EkcpUser
     ErlNifEnv *self_env;
 } ekcp_user;
 
+
+typedef struct _res_t
+{
+    ikcpcb *kcp;
+} res_t;
+
 static ErlNifResourceType *ekcp_recource_type;
 
-static void* ekcp_malloc(size_t size)
-{
-	return enif_alloc_resource(ekcp_recource_type, size);
+static void nif_cleanup(ErlNifEnv* env, void* arg){
+    res_t *res = (res_t*)arg;
+    if ( NULL != res->kcp) {
+        ikcp_release(res->kcp);
+        res->kcp = NULL;
+    }
+
 }
 
-static void ekcp_free(void *ptr)
+static int nif_load(ErlNifEnv * env, void ** priv_data, ERL_NIF_TERM load_info)
 {
-    enif_release_resource(ptr);
-}
-
-static ERL_NIF_TERM load_init(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
-    ekcp_recource_type = enif_open_resource_type(env, NULL, "ekcp_recource_type", NULL, ERL_NIF_RT_CREATE, NULL);
-    if (!ekcp_recource_type) RET_BAD
-    ikcp_allocator(ekcp_malloc, ekcp_free);
-    RET_OK
+    ekcp_recource_type = enif_open_resource_type(env, NULL, "ekcp_recource_type", &nif_cleanup, ERL_NIF_RT_CREATE, NULL);
+    ikcp_allocator(enif_alloc, enif_free);
+    return 0;
 }
 
 static int output(const char *buf, int len, ikcpcb *kcp, void *user)
@@ -98,7 +104,10 @@ static ERL_NIF_TERM ekcp_create(ErlNifEnv *env, int argc, const ERL_NIF_TERM arg
         return enif_make_atom(env, "kcp_create_fail");
     }
     ikcp_setoutput(kcp, output);
-    return enif_make_resource(env, kcp);
+
+    res_t *res = (res_t*)enif_alloc_resource(ekcp_recource_type, sizeof(res_t));
+    res->kcp = kcp;
+    return enif_make_resource(env, res);
 }
 
 static ERL_NIF_TERM ekcp_release(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -109,6 +118,8 @@ static ERL_NIF_TERM ekcp_release(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         kcp->user = NULL;
     }
     ikcp_release(kcp);
+    res->kcp = NULL;
+    enif_release_resource(res);
     RET_OK
 }
 
@@ -195,7 +206,8 @@ static ERL_NIF_TERM ekcp_nodelay(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     GET_INT(2, interval)
     GET_INT(3, resend)
     GET_INT(4, nc)
-    RET_INT(ikcp_nodelay(kcp, nodelay, interval, resend, nc))
+    int ret = ikcp_nodelay(kcp, nodelay, interval, resend, nc);
+    RET_INT(ret);
 }
 
 static ERL_NIF_TERM ekcp_getconv(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -204,9 +216,7 @@ static ERL_NIF_TERM ekcp_getconv(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     RET_UINT(ikcp_getconv(bin.data))
 }
 
-
 static ErlNifFunc nif_funcs[] = {
-    {"load_init", 0, load_init},
     {"create", 2, ekcp_create},
     {"release", 1, ekcp_release},
     {"recv", 1, ekcp_recv},
@@ -222,4 +232,4 @@ static ErlNifFunc nif_funcs[] = {
     {"nodelay", 5, ekcp_nodelay},
     {"getconv", 1, ekcp_getconv}};
 
-ERL_NIF_INIT(ekcp, nif_funcs, NULL, NULL, NULL, NULL)
+ERL_NIF_INIT(ekcp, nif_funcs, nif_load, NULL, NULL, NULL)

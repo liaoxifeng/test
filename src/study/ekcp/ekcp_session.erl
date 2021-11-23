@@ -1,38 +1,20 @@
 %%%-------------------------------------------------------------------
 %%% @author liaoxifeng
-%%% @copyright (C) 2020, <COMPANY>
+%%% @copyright (C) 2021, <COMPANY>
 %%% @doc
-%%% 服务端 包最小(46~64字节) 最大64KB, 最好将UDP的数据长度控制在548字节以内, 超过1472字节就分片处理
 %%%
-%%% list | binary | {mode, list | binary} 以列表还是字符串的形式接收Packet。
-%%% {ip, Address} 当host有多个网络接口的时候，选择其中一个。
-%%% {ifaddr, Address} 和 {ip, Address} 一样的。
-%%% {fd, integer() >= 0} 如果有socket不是使用 gen_udp 来打开的，那么就可能需要设置一个文件描述符。
-%%% inet6 | inet | local 设置socket的类型。
-%%% {udp_module, module()} 覆盖默认的udp模块。
-%%% {multicast_if, Address} 为多播socket设置本地设备。
-%%% {multicast_loop, true | false} 为真时，多播的packets会循环地返回到本地socket。
-%%% {multicast_ttl, Integer} 多播的TTL，默认是1.
-%%% {add_membership, {MultiAddress, InterfaceAddress}} 加入多播群。
-%%% {drop_membership, {MultiAddress, InterfaceAddress}} 离开多播群。
-%%% {active, true | false | once | N} 如果为真，socket收到的所有消息会发送到归属进程。如果为假，就需要显式调用recv；once 是收到消息后，就会发送到进程，但会变为false。数值是指接收多少条数据。
-%%% {buffer, Size} 用户层级的缓冲区大小。
-%%% {delay_send, Boolean} 通常erlang会立刻发出给socket的消息，开启这个选项后，会等待一会儿然后集合发出。
-%%% {deliver, port | term} 发送给归属进程的消息的格式。
-%%% {dontroute, Boolean} 对于发出的消息是否采用路由。
-%%% {exit_on_close, Bloolean} socket 关闭时退出归属进程。
-%%% {header, Size} 只有当binary起作用时才有用，单位是byte。
 %%% @end
-%%% Created : 23. 十月 2020 10:05
+%%% Created : 17. 十一月 2021 15:59
 %%%-------------------------------------------------------------------
--module(udp_srv).
+-module(ekcp_session).
 -author("liaoxifeng").
+-include("ekcp.hrl").
 -include("common.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/4, send/1]).
 
 %% gen_server callbacks
 -export([
@@ -44,15 +26,33 @@
     code_change/3
 ]).
 
--record(state, {
-    port,
-    sock
-}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
+-spec send(Packet) -> Ret when
+    Packet :: binary(),
+    Ret :: integer().
+send(Packet) ->
+    try
+        #ekcp_conf{
+            snd_queue_threshold = MaxWaitNum,
+            send_nodelay = P
+        } = get(ekcp_config),
+        KCP = get(ekcp),
+        WaitNum = ekcp:waitsnd(KCP),
+        if
+            WaitNum > MaxWaitNum ->
+                throw(max_wait_send);
+            true ->
+                Ret = ekcp:send(KCP, Packet),
+                P andalso ekcp:flush(KCP),
+                Ret
+        end
+    catch
+        _Error:_Reason ->
+            ?EKCP_SEND_EAGAIN
+    end.
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -60,12 +60,13 @@
 %% @end
 %%--------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(ConvId, UdpPid, Handler, EKCPConf) ->
+    gen_server:start_link(?MODULE, [ConvId, UdpPid, Handler, EKCPConf], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
+%% Send data from application layer to kcp layer.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -79,16 +80,27 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([]) ->
+init([ConvId, UdpPid, Handler, EKCPConf]) ->
     process_flag(trap_exit, true),
-    Port = 20005,
-    Options = [
-        binary,
-        {active, true}
-        ,{recbuf, 16*1024}
-    ],
-    {ok, Sock} = gen_udp:open(Port, Options),
-    {ok, #state{port = Port, sock = Sock}}.
+    try
+        KCP = ekcp:create(ConvId, UdpPid),
+%%        ekcp:nodelay(KCP, Nodelay, Interval, Resend, NC),
+%%        ekcp:wndsize(KCP, SndWnd, RcvWnd),
+%%        ekcp:setmtu(KCP, Mtu),
+        put(ekcp_conv_id, ConvId),
+        put(ekcp, KCP),
+        put(ekcp_handle_module, Handler),
+        put(ekcp_udp_pid, UdpPid),
+        put(ekcp_start_ms, erlang:system_time(milli_seconds)),
+        put(ekcp_config, EKCPConf),
+        process_flag(trap_exit, true),
+        {ok, State} = Handler:init([]),
+        self() ! ekcp_update,
+        {ok, State}
+    catch
+        _Error:Reason ->
+            {stop, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -98,8 +110,7 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(Request, _From, State) ->
-    ?info("~w~n", [Request]),
+handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -110,8 +121,7 @@ handle_call(Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(Request, State) ->
-    ?info("~w~n", [Request]),
+handle_cast(_Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -124,12 +134,44 @@ handle_cast(Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({udp, _Socket, Host, Form, Msg}, #state{sock = Socket} = State) ->
-    ?info("udp received Form ~w， len ~w", [Form, erlang:byte_size(Msg)]),
-    gen_udp:send(Socket, Host, Form, <<"hello">>),
-    {noreply, State};
-handle_info(Info, State) ->
-    ?info("~w~n", [Info]),
+handle_info(ekcp_recv, State) ->
+    try
+        KCP = get(ekcp),
+        case ekcp:recv(KCP) of
+            <<>> ->
+                {noreply, State};
+            Data ->
+                self() ! ekcp_recv,
+                handle_info({ekcp_recv, Data}, State)
+        end
+    catch
+        _Error:_Reason ->
+            {noreply, State}
+    end;
+handle_info({ekcp_input, Packet}, State) ->
+    try
+        KCP = get(ekcp),
+        ekcp:input(KCP, Packet),
+        self() ! ekcp_recv,
+        {noreply, State}
+    catch
+        _Error:_Reason ->
+            {noreply, State}
+    end;
+handle_info(ekcp_update, State) ->
+    try
+        KCP = get(ekcp),
+        StartMS = get(ekcp_start_ms),
+        NowMS = erlang:system_time(milli_seconds) - StartMS,
+        ekcp:update(KCP, NowMS),
+        NextMS = ekcp:check(KCP, NowMS),
+        erlang:send_after(max(0, NextMS - NowMS), self(), ekcp_update),
+        {noreply, State}
+    catch
+        _Error:_Reason ->
+            {noreply, State}
+    end;
+handle_info(_Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -144,8 +186,8 @@ handle_info(Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-terminate(Reason, _State) ->
-    ?info("~w~n", [Reason]),
+terminate(_Reason, _State) ->
+%%    catch ekcp:release(KCP),
     ok.
 
 %%--------------------------------------------------------------------
@@ -158,7 +200,6 @@ terminate(Reason, _State) ->
 %%--------------------------------------------------------------------
 
 code_change(_OldVsn, State, _Extra) ->
-    ?info("~w~n", [State]),
     {ok, State}.
 
 %%%===================================================================

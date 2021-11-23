@@ -30,7 +30,7 @@
     code_change/3
 ]).
 
--define(path, "/mnt/d/work/zone/moli_local_1/lager_log/error.log").
+-define(path, "/mnt/d/work/zone/moli_local_1/log/log_join-log_1.txt").
 
 %%%===================================================================
 %%% API

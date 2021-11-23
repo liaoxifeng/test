@@ -1,7 +1,5 @@
 -module(ekcp).
 
--export([load_init/0]).
-
 -export([create/2, release/1, recv/1, send/2,
          update/2, check/2, input/2, flush/1,
          peeksize/1, setmtu/2, wndsize/3, waitsnd/1,
@@ -10,11 +8,7 @@
 -on_load(init/0).
 
 init() ->
-    erlang:load_nif("./priv/ekcp", 0),
-    ok = load_init().
-
-load_init() ->
-    erlang:nif_error("NIF library not loaded").
+    erlang:load_nif("../priv/ekcp", 0).
 
 %%%===================================================================
 %%% kcp interface

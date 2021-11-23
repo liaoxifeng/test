@@ -1,38 +1,20 @@
 %%%-------------------------------------------------------------------
 %%% @author liaoxifeng
-%%% @copyright (C) 2020, <COMPANY>
+%%% @copyright (C) 2021, <COMPANY>
 %%% @doc
-%%% 服务端 包最小(46~64字节) 最大64KB, 最好将UDP的数据长度控制在548字节以内, 超过1472字节就分片处理
 %%%
-%%% list | binary | {mode, list | binary} 以列表还是字符串的形式接收Packet。
-%%% {ip, Address} 当host有多个网络接口的时候，选择其中一个。
-%%% {ifaddr, Address} 和 {ip, Address} 一样的。
-%%% {fd, integer() >= 0} 如果有socket不是使用 gen_udp 来打开的，那么就可能需要设置一个文件描述符。
-%%% inet6 | inet | local 设置socket的类型。
-%%% {udp_module, module()} 覆盖默认的udp模块。
-%%% {multicast_if, Address} 为多播socket设置本地设备。
-%%% {multicast_loop, true | false} 为真时，多播的packets会循环地返回到本地socket。
-%%% {multicast_ttl, Integer} 多播的TTL，默认是1.
-%%% {add_membership, {MultiAddress, InterfaceAddress}} 加入多播群。
-%%% {drop_membership, {MultiAddress, InterfaceAddress}} 离开多播群。
-%%% {active, true | false | once | N} 如果为真，socket收到的所有消息会发送到归属进程。如果为假，就需要显式调用recv；once 是收到消息后，就会发送到进程，但会变为false。数值是指接收多少条数据。
-%%% {buffer, Size} 用户层级的缓冲区大小。
-%%% {delay_send, Boolean} 通常erlang会立刻发出给socket的消息，开启这个选项后，会等待一会儿然后集合发出。
-%%% {deliver, port | term} 发送给归属进程的消息的格式。
-%%% {dontroute, Boolean} 对于发出的消息是否采用路由。
-%%% {exit_on_close, Bloolean} socket 关闭时退出归属进程。
-%%% {header, Size} 只有当binary起作用时才有用，单位是byte。
 %%% @end
-%%% Created : 23. 十月 2020 10:05
+%%% Created : 17. 十一月 2021 15:59
 %%%-------------------------------------------------------------------
--module(udp_srv).
+-module(ekcp_service).
 -author("liaoxifeng").
+-include("ekcp.hrl").
 -include("common.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/3]).
 
 %% gen_server callbacks
 -export([
@@ -46,7 +28,8 @@
 
 -record(state, {
     port,
-    sock
+    socket,
+    ekcp_conf
 }).
 
 %%%===================================================================
@@ -60,8 +43,8 @@
 %% @end
 %%--------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Port, UDPOpts, EKCPConf) ->
+    gen_server:start_link(ekcp_service, [Port, UDPOpts, EKCPConf], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -79,16 +62,19 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([]) ->
+init([Port, Options, EKCPConf]) ->
     process_flag(trap_exit, true),
-    Port = 20005,
-    Options = [
-        binary,
-        {active, true}
-        ,{recbuf, 16*1024}
-    ],
-    {ok, Sock} = gen_udp:open(Port, Options),
-    {ok, #state{port = Port, sock = Sock}}.
+    case gen_udp:open(Port, Options) of
+        {ok, Socket} ->
+            {ok, #state{
+                port = Port,
+                socket = Socket,
+                ekcp_conf = EKCPConf
+            }};
+        {error, Reason} ->
+            ?error("ekcp_service start failure [~w]", [Reason]),
+            {stop, normal}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -98,8 +84,7 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_call(Request, _From, State) ->
-    ?info("~w~n", [Request]),
+handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -110,8 +95,7 @@ handle_call(Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast(Request, State) ->
-    ?info("~w~n", [Request]),
+handle_cast(_Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -124,12 +108,17 @@ handle_cast(Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({udp, _Socket, Host, Form, Msg}, #state{sock = Socket} = State) ->
-    ?info("udp received Form ~w， len ~w", [Form, erlang:byte_size(Msg)]),
-    gen_udp:send(Socket, Host, Form, <<"hello">>),
+
+handle_info({udp, Socket, Ip, Port, Packet}, State) ->
+%%    ekcp_session_sup:start_child(ConvId, self(), Handler, EKCPConf),
+%%    ekcp:getconv(Packet),
     {noreply, State};
-handle_info(Info, State) ->
-    ?info("~w~n", [Info]),
+handle_info({ekcp_output, Packet}, #state{socket = Socket} = State) ->
+%%    gen_udp:send(Socket, Ip, Port, Packet),
+    {noreply, State};
+handle_info({'EXIT', Pid, _Reason}, #state{} = State) ->
+    {noreply, State};
+handle_info(_Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -144,8 +133,8 @@ handle_info(Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-terminate(Reason, _State) ->
-    ?info("~w~n", [Reason]),
+terminate(_Reason, State) ->
+    catch gen_udp:close(State#state.socket),
     ok.
 
 %%--------------------------------------------------------------------
@@ -158,7 +147,6 @@ terminate(Reason, _State) ->
 %%--------------------------------------------------------------------
 
 code_change(_OldVsn, State, _Extra) ->
-    ?info("~w~n", [State]),
     {ok, State}.
 
 %%%===================================================================
