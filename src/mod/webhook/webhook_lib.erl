@@ -20,6 +20,8 @@
     ,weather2/0
     ,weather3/0
     ,drink/0
+    ,eat/0
+    ,leave/0
 ]).
 
 
@@ -232,5 +234,17 @@ decode_handler(Element, L) ->
 %% 喝水
 drink() ->
     Body = webhook_lib:webhook_image("../priv/drink.png"),
+    httpc:request(post, {?send_url, [], "application/json", Body}, [], []),
+    ok.
+
+%% 吃饭
+eat() ->
+    Body = webhook_lib:webhook_image("../priv/5.png"),
+    httpc:request(post, {?send_url, [], "application/json", Body}, [], []),
+    ok.
+
+%% 下班
+leave() ->
+    Body = webhook_lib:webhook_image("../priv/6.png"),
     httpc:request(post, {?send_url, [], "application/json", Body}, [], []),
     ok.

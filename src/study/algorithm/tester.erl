@@ -11,9 +11,6 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-%% API
--export([p/0]).
-
 length_test() ->
     ?assert(length([1,2,3]) =:= 3).
 
@@ -60,5 +57,21 @@ to_next(P, [H|L]) -> [H + P | L].
 p319_test() ->
     erlang:trunc(math:sqrt(10)).
 
-p() ->
-    ok.
+p506_test() ->
+    L = [6,4,2,7,1],
+    Out = ["Gold Medal","Silver Medal","Bronze Medal"],
+    L2 = do_p506(L, 1),
+    L3 = lists:reverse(lists:keysort(1, L2)),
+    do_p506_(L3, Out, 4, []).
+
+do_p506(L, N) -> do_p506(L, N, []).
+do_p506([], _, New) -> New;
+do_p506([H | L], N, New) -> do_p506(L, N + 1, [{H, N} | New]).
+
+do_p506_([], _Out, _N, Req) ->
+    L = lists:keysort(1,Req),
+    [unicode:characters_to_binary(Sign) || {_, Sign} <- L];
+do_p506_([{_, Index} | L], [], N, Req) ->
+    do_p506_(L, [], N + 1, [{Index, integer_to_list(N)} | Req]);
+do_p506_([{_, Index} | L], [Sign | Out], N, Req) ->
+    do_p506_(L, Out, N, [{Index, Sign} | Req]).
